@@ -1,0 +1,3 @@
+0000000000000000000000000000000000000000 e86ec252dead1a49563e2a57f16bf31bee8954a5 Shingu <shingu9791@gmail.com> 1776393617 +0900	clone: from https://github.com/Sw1tch9789/ColorfuLS.git
+e86ec252dead1a49563e2a57f16bf31bee8954a5 7207d873469b4bc28eaec51105587aea2b9dbdce Shingu <shingu9791@gmail.com> 1776394385 +0900	commit: Create .gitignore
+7207d873469b4bc28eaec51105587aea2b9dbdce 5dd2e846744b6b3cbe923fcc7bbad1edfff79645 Shingu <shingu9791@gmail.com> 1776963610 +0900	commit: Rustプロジェクトとして初期化
