@@ -1,3 +1,6 @@
+# Badge
+[![Coverage Status](https://coveralls.io/repos/github/Sw1tch9789/ColorfuLS/badge.svg?branch=main)](https://coveralls.io/github/Sw1tch9789/ColorfuLS?branch=main)
+
 # ColorfuLS
 ディレクトリやファイル、拡張子ごとに色を設定して、リスト表示を行う。
 
