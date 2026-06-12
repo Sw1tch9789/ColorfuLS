@@ -69,4 +69,7 @@ Cargo.lock
 .history
 .ionide
 
+# Hugo themes
+/themes/docsy/
+
 # End of https://www.toptal.com/developers/gitignore/api/rust,visualstudiocode,macos
