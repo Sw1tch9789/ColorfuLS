@@ -527,3 +527,74 @@ fn open_profile_default() -> io::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn parse_rule_line_parses_pattern_color_and_target() {
+        let actual = parse_rule_line("dir:.*README.* => magenta");
+        assert!(actual.is_some());
+        let (pattern, color, target) = actual.unwrap();
+        assert_eq!(pattern, ".*README.*");
+        assert_eq!(color, "magenta");
+        matches!(target, TargetKind::Dir);
+    }
+
+    #[test]
+    fn parse_rule_line_returns_none_for_invalid_format() {
+        assert!(parse_rule_line("not-a-rule").is_none());
+        assert!(parse_rule_line("file:^.*rs$").is_none());
+    }
+
+    #[test]
+    fn color_name_to_code_returns_expected_escape_sequences() {
+        assert_eq!(color_name_to_code("blue"), Some("\x1b[34m"));
+        assert_eq!(color_name_to_code("Bright_Black"), Some("\x1b[90m"));
+        assert_eq!(color_name_to_code("unknown"), None);
+    }
+
+    #[test]
+    fn rgb_to_ansi256_maps_black_and_white_consistently() {
+        assert_eq!(rgb_to_ansi256(0, 0, 0), 16);
+        assert_eq!(rgb_to_ansi256(255, 255, 255), 231);
+    }
+
+    #[test]
+    fn color_spec_to_escape_converts_supported_formats() {
+        let hex_escape = color_spec_to_escape("#112233");
+        if supports_truecolor() {
+            assert_eq!(hex_escape, "\x1b[38;2;17;34;51m");
+        } else {
+            assert_eq!(hex_escape, format!("\x1b[38;5;{}m", rgb_to_ansi256(0x11, 0x22, 0x33)));
+        }
+
+        let rgb_escape = color_spec_to_escape("rgb:17,34,51");
+        if supports_truecolor() {
+            assert_eq!(rgb_escape, "\x1b[38;2;17;34;51m");
+        } else {
+            assert_eq!(rgb_escape, format!("\x1b[38;5;{}m", rgb_to_ansi256(17, 34, 51)));
+        }
+
+        assert_eq!(color_spec_to_escape("ansi:88"), "\x1b[38;5;88m");
+        assert_eq!(color_spec_to_escape("magenta"), "\x1b[35m");
+        assert_eq!(color_spec_to_escape("not-a-color"), DEFAULT_COLOR.to_string());
+    }
+
+    #[test]
+    fn color_for_entry_applies_profile_rules_and_hidden_color() {
+        let path = PathBuf::from("example.rs");
+        let rules = vec![Rule {
+            re: Regex::new(".*\\.rs$").unwrap(),
+            color: "red".to_string(),
+            target: TargetKind::Any,
+        }];
+
+        assert_eq!(color_for_entry(&path, &rules), "\x1b[31m");
+
+        let hidden = PathBuf::from(".hidden");
+        assert_eq!(color_for_entry(&hidden, &Vec::new()), HIDDEN_COLOR.to_string());
+    }
+}
