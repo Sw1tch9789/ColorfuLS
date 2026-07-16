@@ -1,0 +1,27 @@
+baseURL = 'https://example.org/'
+title = 'My New Hugo Project'
+theme = 'docsy'
+locale = 'en-us'
+languageCode = 'ja'
+
+# Docsyの基本設定
+enableGitInfo = true
+
+[params]
+description = "Documentation site"
+
+# メニュー設定
+[[menu.main]]
+name = "Documentation"
+url = "/docs/"
+weight = 10
+
+[[menu.main]]
+name = "Blog"
+url = "/blog/"
+weight = 20
+
+# Docsyのパラメータ
+[params.ui]
+sidebar_menu_compact = false
+ul_show = 1
