@@ -42,9 +42,28 @@ fn main() -> io::Result<()> {
 
     let rules = load_rules().unwrap_or_default();
 
+    // parse simple flags: -a/--all (show hidden), -l/--long (long listing)
+    let mut show_all = false;
+    let mut long_format = false;
+    for a in &args_vec {
+        match a.as_str() {
+            "-a" | "--all" => show_all = true,
+            "-l" | "--long" => long_format = true,
+            _ => {}
+        }
+    }
+
     let cwd = env::current_dir()?;
     let mut entries = fs::read_dir(&cwd)?
         .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            if show_all {
+                true
+            } else {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                !name.starts_with('.')
+            }
+        })
         .collect::<Vec<_>>();
 
     entries.sort_by_key(|entry| entry.file_name());
@@ -53,7 +72,15 @@ fn main() -> io::Result<()> {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
         let color = color_for_entry(&path, &rules);
-        println!("{}{}{}", color, name, RESET);
+        if long_format {
+            if let Ok(metadata) = fs::symlink_metadata(&path) {
+                println!("{}{}{}", format_long_entry(&path, &metadata, &color, &name), RESET, "");
+            } else {
+                println!("{}{}{}", color, name, RESET);
+            }
+        } else {
+            println!("{}{}{}", color, name, RESET);
+        }
     }
 
     Ok(())
@@ -199,6 +226,43 @@ fn supports_truecolor() -> bool {
         }
     }
     false
+}
+
+fn format_long_entry(path: &PathBuf, metadata: &fs::Metadata, color: &str, name: &str) -> String {
+    let file_type = if metadata.is_dir() {
+        'd'
+    } else if metadata.file_type().is_symlink() {
+        'l'
+    } else {
+        '-'
+    };
+
+    let perms = format_permissions(metadata);
+    let size = metadata.len();
+    let mtime = metadata.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
+
+    format!("{}{} {:>8} {:>12} {}{}", file_type, perms, size, mtime, color, name)
+}
+
+#[cfg(unix)]
+fn format_permissions(metadata: &fs::Metadata) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = metadata.permissions().mode();
+    let mut s = String::with_capacity(9);
+    let flags = [0o400,0o200,0o100, 0o040,0o020,0o010, 0o004,0o002,0o001];
+    for &f in &flags {
+        s.push(if mode & f != 0 { match f {
+            0o400|0o040|0o004 => 'r',
+            0o200|0o020|0o002 => 'w',
+            _ => 'x',
+        } } else { '-'});
+    }
+    s
+}
+
+#[cfg(not(unix))]
+fn format_permissions(_metadata: &fs::Metadata) -> String {
+    "rwxrwxrwx".to_string()
 }
 
 fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
