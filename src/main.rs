@@ -27,15 +27,16 @@ struct Rule {
 
 fn main() -> io::Result<()> {
     // CLI: support `--profile <application>` to open the profile file in an application
-    let mut args = env::args().skip(1);
-    if let Some(flag) = args.next() {
-        if flag == "--profile" {
-            if let Some(app) = args.next() {
-                return open_profile_in_app(&app);
-            } else {
-                eprintln!("Usage: cols --profile <application>");
-                return Ok(());
-            }
+    let mut args_vec: Vec<String> = env::args().skip(1).collect();
+    // search for --profile or -pf anywhere in args
+    if let Some(pos) = args_vec.iter().position(|a| a == "--profile" || a == "-pf") {
+        // if next token exists and is not another flag, treat as application name
+        let app = args_vec.get(pos + 1).and_then(|s| if s.starts_with('-') { None } else { Some(s.clone()) });
+        if let Some(app_name) = app {
+            return open_profile_in_app(&app_name);
+        } else {
+            // open with system default
+            return open_profile_default();
         }
     }
 
@@ -230,6 +231,47 @@ fn open_profile_in_app(app: &str) -> io::Result<()> {
                 }
             }
         }
+    } else {
+        eprintln!("No profile file found to open");
+    }
+    Ok(())
+}
+
+fn open_profile_default() -> io::Result<()> {
+    if let Some(path) = find_profile_path() {
+        #[cfg(target_os = "macos")]
+        {
+            let status = Command::new("open").arg(path).status();
+            match status {
+                Ok(s) => if !s.success() { eprintln!("open returned non-zero"); },
+                Err(e) => eprintln!("Error launching open: {}", e),
+            }
+            return Ok(());
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            // Prefer xdg-open when available
+            if Command::new("xdg-open").arg(&path).status().is_ok() {
+                return Ok(());
+            }
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+        {
+            // Try $EDITOR if set
+            if let Ok(editor) = env::var("EDITOR") {
+                if Command::new(editor).arg(&path).spawn().is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+
+        // Final fallback: try to spawn system default by invoking `open` (mac) or xdg-open (linux)
+        #[cfg(target_os = "macos")]
+        { let _ = Command::new("open").arg(&path).status(); }
+        #[cfg(target_os = "linux")]
+        { let _ = Command::new("xdg-open").arg(&path).status(); }
     } else {
         eprintln!("No profile file found to open");
     }
