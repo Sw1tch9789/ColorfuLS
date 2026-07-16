@@ -17,6 +17,39 @@ cols [OPTIONS] [FILE]
 --profile / -pf プロファイルを開きます。
 ```
 
+## Spec 要点
+
+`.github/assets/spec.md` の要点:
+
+- `cols [OPTIONS] [FILE]`
+	- 指定ディレクトリ（省略時はカレントディレクトリ）の内容を、プロファイルに基づいて色付け表示します。
+- `cols --profile [application]`
+	- プロファイルを開きます（`-pf` でも可）。
+
+## color_rules の書き方
+
+1 行 1 ルールで次の形式です。
+
+```text
+[dir:|file:]<regex> => <color-or-ANSI>
+```
+
+- `dir:`: ディレクトリのみ対象
+- `file:`: ファイルのみ対象
+- 接頭辞なし: ファイル/ディレクトリ両方を対象
+- `#` から始まる行はコメント
+- 空行は無視
+
+例:
+
+```text
+dir:^docs$ => cyan
+file:^.*\.rs$ => magenta
+.*README.* => magenta
+^\.gitmodules$ => yellow
+.*cargo.* => #66CDAA
+```
+
 ## Docker 配布
 
 このプロジェクトでは、CLI イメージとドキュメントイメージを Docker Hub に配布できます。
