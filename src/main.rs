@@ -72,7 +72,7 @@ fn color_for_entry(path: &PathBuf, rules: &Vec<Rule>) -> String {
             };
             if target_ok {
                 if rule.re.is_match(name) {
-                    return rule.color.clone();
+                    return color_spec_to_escape(&rule.color);
                 }
             }
         }
@@ -80,7 +80,7 @@ fn color_for_entry(path: &PathBuf, rules: &Vec<Rule>) -> String {
         // If metadata can't be read, still try matching by name
         for rule in rules {
             if rule.re.is_match(name) {
-                return rule.color.clone();
+                return color_spec_to_escape(&rule.color);
             }
         }
     }
@@ -145,14 +145,8 @@ fn parse_rule_line(line: &str) -> Option<(String, String, TargetKind)> {
         TargetKind::Any
     };
 
-    let color = if color_part.starts_with("\\x1b[") {
-        color_part.to_string()
-    } else if let Some(code) = color_name_to_code(color_part) {
-        code.to_string()
-    } else {
-        // fallback to default if unknown
-        DEFAULT_COLOR.to_string()
-    };
+    // Store the raw color spec; resolution to an ANSI escape happens at render time.
+    let color = color_part.to_string();
 
     Some((pat.to_string(), color, target))
 }
@@ -175,15 +169,11 @@ fn load_rules() -> io::Result<Vec<Rule>> {
                     continue;
                 }
                 if let Some((pat, color, target)) = parse_rule_line(line) {
-                    match Regex::new(&pat) {
+                    // Always compile profile regexes case-insensitively so patterns like
+                    // '.*cargo.*' match 'Cargo.lock' as well.
+                    match regex::RegexBuilder::new(&pat).case_insensitive(true).build() {
                         Ok(re) => rules.push(Rule { re, color, target }),
-                        Err(e) => {
-                            // Try compiling with case-insensitive flag via builder fallback
-                            match regex::RegexBuilder::new(&pat).case_insensitive(true).build() {
-                                Ok(re2) => rules.push(Rule { re: re2, color, target }),
-                                Err(e2) => eprintln!("Skipping invalid regex on {}:{} ({})", opt.display(), i+1, e2),
-                            }
-                        }
+                        Err(e) => eprintln!("Skipping invalid regex on {}:{} ({})", opt.display(), i+1, e),
                     }
                 } else {
                     eprintln!("Skipping malformed rule on {}:{}", opt.display(), i+1);
@@ -194,6 +184,82 @@ fn load_rules() -> io::Result<Vec<Rule>> {
     }
 
     Ok(Vec::new())
+}
+
+fn supports_truecolor() -> bool {
+    if let Ok(colorterm) = env::var("COLORTERM") {
+        let lower = colorterm.to_lowercase();
+        if lower.contains("truecolor") || lower.contains("24bit") {
+            return true;
+        }
+    }
+    if let Ok(term) = env::var("TERM") {
+        if term.to_lowercase().contains("truecolor") {
+            return true;
+        }
+    }
+    false
+}
+
+fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
+    // map to 6x6x6 cube (16..231)
+    let r6 = (r as u16 * 5 / 255) as u8;
+    let g6 = (g as u16 * 5 / 255) as u8;
+    let b6 = (b as u16 * 5 / 255) as u8;
+    16 + 36 * r6 + 6 * g6 + b6
+}
+
+fn color_spec_to_escape(spec: &str) -> String {
+    // if it's already an escape seq
+    if spec.starts_with("\x1b[") {
+        return spec.to_string();
+    }
+
+    // hex: #RRGGBB
+    if spec.starts_with('#') && spec.len() == 7 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&spec[1..3], 16),
+            u8::from_str_radix(&spec[3..5], 16),
+            u8::from_str_radix(&spec[5..7], 16),
+        ) {
+            if supports_truecolor() {
+                return format!("\x1b[38;2;{};{};{}m", r, g, b);
+            } else {
+                let idx = rgb_to_ansi256(r, g, b);
+                return format!("\x1b[38;5;{}m", idx);
+            }
+        }
+    }
+
+    // rgb:R,G,B
+    if spec.to_lowercase().starts_with("rgb:") {
+        let rest = &spec[4..];
+        let parts: Vec<&str> = rest.split(',').collect();
+        if parts.len() == 3 {
+            if let (Ok(r), Ok(g), Ok(b)) = (parts[0].trim().parse::<u8>(), parts[1].trim().parse::<u8>(), parts[2].trim().parse::<u8>()) {
+                if supports_truecolor() {
+                    return format!("\x1b[38;2;{};{};{}m", r, g, b);
+                } else {
+                    let idx = rgb_to_ansi256(r, g, b);
+                    return format!("\x1b[38;5;{}m", idx);
+                }
+            }
+        }
+    }
+
+    // ansi:NNN (256-color index)
+    if spec.to_lowercase().starts_with("ansi:") {
+        if let Ok(idx) = spec[5..].trim().parse::<u8>() {
+            return format!("\x1b[38;5;{}m", idx);
+        }
+    }
+
+    // named color fallback
+    if let Some(code) = color_name_to_code(spec) {
+        return code.to_string();
+    }
+
+    DEFAULT_COLOR.to_string()
 }
 
 fn find_profile_path() -> Option<PathBuf> {
