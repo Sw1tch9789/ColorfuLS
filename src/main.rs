@@ -1,50 +1,79 @@
+//! カレントディレクトリの一覧を表示する軽量な `cols` バイナリです
+//!
+//! - プロファイル (`color_rules`) による色付け
+//! - `-a/--all` で隠しファイル表示
+//! - `-l/--long` で `ls -l` 風の詳細表示
+//!
+//! ドキュメントは `cargo doc` で生成できます。
+
 use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::process::Command;
-use regex::Regex;
-use chrono::Local;
-use users::{get_user_by_uid, get_group_by_gid};
 
+use chrono::Local;
+use regex::Regex;
+use users::{get_group_by_gid, get_user_by_uid};
+
+/// リセット用 ANSI シーケンス
 const RESET: &str = "\x1b[0m";
+
+/// ディレクトリ表示の色（ANSI シーケンス）
 const DIRECTORY_COLOR: &str = "\x1b[34m";
+
+/// 実行可能ファイル表示の色
 const EXECUTABLE_COLOR: &str = "\x1b[32m";
+
+/// シンボリックリンク表示の色
 const SYMLINK_COLOR: &str = "\x1b[36m";
+
+/// 隠しファイル表示の色
 const HIDDEN_COLOR: &str = "\x1b[90m";
+
+/// デフォルト色
 const DEFAULT_COLOR: &str = "\x1b[39m";
 
+/// プロファイルルールの対象種別
 #[derive(Debug)]
 enum TargetKind {
+    /// ファイル・ディレクトリ問わず
     Any,
+    /// ファイルのみ
     File,
+    /// ディレクトリのみ
     Dir,
 }
 
+/// ルール構造体：正規表現、色指定、ターゲット種別
 struct Rule {
     re: Regex,
     color: String,
     target: TargetKind,
 }
 
+/// エントリ表示のエントリポイント
+///
+/// - `-a/--all` で隠しファイルを表示
+/// - `-l/--long` で詳細表示
 fn main() -> io::Result<()> {
-    // CLI: support `--profile <application>` to open the profile file in an application
+    // 引数収集
     let mut args_vec: Vec<String> = env::args().skip(1).collect();
-    // search for --profile or -pf anywhere in args
+
+    // プロファイルを開くオプション（優先）
     if let Some(pos) = args_vec.iter().position(|a| a == "--profile" || a == "-pf") {
-        // if next token exists and is not another flag, treat as application name
         let app = args_vec.get(pos + 1).and_then(|s| if s.starts_with('-') { None } else { Some(s.clone()) });
         if let Some(app_name) = app {
             return open_profile_in_app(&app_name);
         } else {
-            // open with system default
             return open_profile_default();
         }
     }
 
+    // プロファイル読み込み
     let rules = load_rules().unwrap_or_default();
 
-    // parse simple flags: -a/--all (show hidden), -l/--long (long listing)
+    // フラグ解析
     let mut show_all = false;
     let mut long_format = false;
     for a in &args_vec {
@@ -55,6 +84,7 @@ fn main() -> io::Result<()> {
         }
     }
 
+    // ディレクトリ読み取り
     let cwd = env::current_dir()?;
     let mut entries = fs::read_dir(&cwd)?
         .filter_map(|entry| entry.ok())
@@ -68,9 +98,10 @@ fn main() -> io::Result<()> {
         })
         .collect::<Vec<_>>();
 
+    // 名前でケースインセンシティブにソート（ls 風）
     entries.sort_by_key(|entry| entry.file_name().to_string_lossy().to_lowercase());
 
-    // If long format, compute column widths for owner/group/size
+    // -l の場合は列幅を事前計算
     let (mut max_user_w, mut max_group_w, mut max_size_w) = (0usize, 0usize, 0usize);
     if long_format {
         for entry in &entries {
@@ -97,10 +128,12 @@ fn main() -> io::Result<()> {
         }
     }
 
+    // 表示ループ
     for entry in entries {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
         let color = color_for_entry(&path, &rules);
+
         if long_format {
             if let Ok(metadata) = fs::symlink_metadata(&path) {
                 println!("{}{}", format_long_entry_with_widths(&path, &metadata, &color, &name, max_user_w, max_group_w, max_size_w), RESET);
@@ -115,73 +148,13 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn color_for_entry(path: &PathBuf, rules: &Vec<Rule>) -> String {
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+// ---------------------------------------------------------------------------
+// プロファイル（color_rules）関連ヘルパー群
+// ---------------------------------------------------------------------------
 
-    // Profile rules are highest priority
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        for rule in rules {
-            let target_ok = match rule.target {
-                TargetKind::Any => true,
-                TargetKind::Dir => metadata.is_dir(),
-                TargetKind::File => metadata.is_file(),
-            };
-            if target_ok {
-                if rule.re.is_match(name) {
-                    return color_spec_to_escape(&rule.color);
-                }
-            }
-        }
-    } else {
-        // If metadata can't be read, still try matching by name
-        for rule in rules {
-            if rule.re.is_match(name) {
-                return color_spec_to_escape(&rule.color);
-            }
-        }
-    }
-
-    // Fallback to existing behavior
-    if name.starts_with('.') {
-        return HIDDEN_COLOR.to_string();
-    }
-
-    // cargo handled via profile rules (color_rules)
-
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        if metadata.file_type().is_symlink() {
-            return SYMLINK_COLOR.to_string();
-        }
-
-        if metadata.is_dir() {
-            return DIRECTORY_COLOR.to_string();
-        }
-
-        if metadata.is_file() && is_executable(&metadata) {
-            return EXECUTABLE_COLOR.to_string();
-        }
-    }
-
-    DEFAULT_COLOR.to_string()
-}
-
-fn color_name_to_code(name: &str) -> Option<&'static str> {
-    match name.to_lowercase().as_str() {
-        "black" => Some("\x1b[30m"),
-        "red" => Some("\x1b[31m"),
-        "green" => Some("\x1b[32m"),
-        "yellow" => Some("\x1b[33m"),
-        "blue" => Some("\x1b[34m"),
-        "magenta" => Some("\x1b[35m"),
-        "cyan" => Some("\x1b[36m"),
-        "white" => Some("\x1b[37m"),
-        "bright_black" | "grey" => Some("\x1b[90m"),
-        _ => None,
-    }
-}
-
+/// ルール行を解析して (pattern, color_spec, target) を返す
 fn parse_rule_line(line: &str) -> Option<(String, String, TargetKind)> {
-    // expected formats:
+    // 期待される形式:
     // dir:.*README.* => magenta
     // file:^.*\.rs$ => \x1b[35m
     let parts: Vec<&str> = line.split("=>").collect();
@@ -201,14 +174,29 @@ fn parse_rule_line(line: &str) -> Option<(String, String, TargetKind)> {
         TargetKind::Any
     };
 
-    // Store the raw color spec; resolution to an ANSI escape happens at render time.
     let color = color_part.to_string();
-
     Some((pat.to_string(), color, target))
 }
 
+/// プロファイルファイルのパス候補を探す
+fn find_profile_path() -> Option<PathBuf> {
+    let paths = vec![
+        env::var("COLOR_RULES").ok().map(PathBuf::from),
+        Some(PathBuf::from("color_rules")),
+        env::var("HOME").ok().map(|h| PathBuf::from(h).join(".config/colorfuls/color_rules")),
+    ];
+
+    for opt in paths.into_iter().flatten() {
+        if opt.exists() {
+            return Some(opt);
+        }
+    }
+
+    None
+}
+
+/// プロファイルを読み込み、正規表現とルールリストを返す
 fn load_rules() -> io::Result<Vec<Rule>> {
-    // Determine profile path: env COLOR_RULES, ./color_rules, ~/.config/colorfuls/color_rules
     let paths = vec![
         env::var("COLOR_RULES").ok().map(PathBuf::from),
         Some(PathBuf::from("color_rules")),
@@ -225,8 +213,6 @@ fn load_rules() -> io::Result<Vec<Rule>> {
                     continue;
                 }
                 if let Some((pat, color, target)) = parse_rule_line(line) {
-                    // Always compile profile regexes case-insensitively so patterns like
-                    // '.*cargo.*' match 'Cargo.lock' as well.
                     match regex::RegexBuilder::new(&pat).case_insensitive(true).build() {
                         Ok(re) => rules.push(Rule { re, color, target }),
                         Err(e) => eprintln!("Skipping invalid regex on {}:{} ({})", opt.display(), i+1, e),
@@ -242,6 +228,36 @@ fn load_rules() -> io::Result<Vec<Rule>> {
     Ok(Vec::new())
 }
 
+// ---------------------------------------------------------------------------
+// 色関連ユーティリティ
+// ---------------------------------------------------------------------------
+
+/// 名前から短い ANSI カラーコードを返す（既存の色名対応）
+fn color_name_to_code(name: &str) -> Option<&'static str> {
+    match name.to_lowercase().as_str() {
+        "black" => Some("\x1b[30m"),
+        "red" => Some("\x1b[31m"),
+        "green" => Some("\x1b[32m"),
+        "yellow" => Some("\x1b[33m"),
+        "blue" => Some("\x1b[34m"),
+        "magenta" => Some("\x1b[35m"),
+        "cyan" => Some("\x1b[36m"),
+        "white" => Some("\x1b[37m"),
+        "bright_black" | "grey" => Some("\x1b[90m"),
+        _ => None,
+    }
+}
+
+/// RGB を 256 色インデックスに近似変換する
+fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
+    // 6x6x6 キューブへマップ（16..231）
+    let r6 = (r as u16 * 5 / 255) as u8;
+    let g6 = (g as u16 * 5 / 255) as u8;
+    let b6 = (b as u16 * 5 / 255) as u8;
+    16 + 36 * r6 + 6 * g6 + b6
+}
+
+/// ターミナルが truecolor (24bit) をサポートしているか簡易判定
 fn supports_truecolor() -> bool {
     if let Ok(colorterm) = env::var("COLORTERM") {
         let lower = colorterm.to_lowercase();
@@ -257,6 +273,131 @@ fn supports_truecolor() -> bool {
     false
 }
 
+/// color spec (#RRGGBB, rgb:R,G,B, ansi:N, 名前, または既に ANSI エスケープ) を
+/// 実際の ANSI エスケープ列に変換して返す
+fn color_spec_to_escape(spec: &str) -> String {
+    if spec.starts_with("\x1b[") {
+        return spec.to_string();
+    }
+
+    if spec.starts_with('#') && spec.len() == 7 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&spec[1..3], 16),
+            u8::from_str_radix(&spec[3..5], 16),
+            u8::from_str_radix(&spec[5..7], 16),
+        ) {
+            if supports_truecolor() {
+                return format!("\x1b[38;2;{};{};{}m", r, g, b);
+            } else {
+                let idx = rgb_to_ansi256(r, g, b);
+                return format!("\x1b[38;5;{}m", idx);
+            }
+        }
+    }
+
+    if spec.to_lowercase().starts_with("rgb:") {
+        let rest = &spec[4..];
+        let parts: Vec<&str> = rest.split(',').collect();
+        if parts.len() == 3 {
+            if let (Ok(r), Ok(g), Ok(b)) = (parts[0].trim().parse::<u8>(), parts[1].trim().parse::<u8>(), parts[2].trim().parse::<u8>()) {
+                if supports_truecolor() {
+                    return format!("\x1b[38;2;{};{};{}m", r, g, b);
+                } else {
+                    let idx = rgb_to_ansi256(r, g, b);
+                    return format!("\x1b[38;5;{}m", idx);
+                }
+            }
+        }
+    }
+
+    if spec.to_lowercase().starts_with("ansi:") {
+        if let Ok(idx) = spec[5..].trim().parse::<u8>() {
+            return format!("\x1b[38;5;{}m", idx);
+        }
+    }
+
+    if let Some(code) = color_name_to_code(spec) {
+        return code.to_string();
+    }
+
+    DEFAULT_COLOR.to_string()
+}
+
+/// エントリに対する色を決定する（プロファイル優先）
+fn color_for_entry(path: &PathBuf, rules: &Vec<Rule>) -> String {
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+
+    // 1) プロファイルルール（優先）
+    if let Ok(metadata) = fs::symlink_metadata(path) {
+        for rule in rules {
+            let target_ok = match rule.target {
+                TargetKind::Any => true,
+                TargetKind::Dir => metadata.is_dir(),
+                TargetKind::File => metadata.is_file(),
+            };
+            if target_ok {
+                if rule.re.is_match(name) {
+                    return color_spec_to_escape(&rule.color);
+                }
+            }
+        }
+    } else {
+        for rule in rules {
+            if rule.re.is_match(name) {
+                return color_spec_to_escape(&rule.color);
+            }
+        }
+    }
+
+    // 2) デフォルト挙動
+    if name.starts_with('.') {
+        return HIDDEN_COLOR.to_string();
+    }
+
+    if let Ok(metadata) = fs::symlink_metadata(path) {
+        if metadata.file_type().is_symlink() {
+            return SYMLINK_COLOR.to_string();
+        }
+
+        if metadata.is_dir() {
+            return DIRECTORY_COLOR.to_string();
+        }
+
+        if metadata.is_file() && is_executable(&metadata) {
+            return EXECUTABLE_COLOR.to_string();
+        }
+    }
+
+    DEFAULT_COLOR.to_string()
+}
+
+// ---------------------------------------------------------------------------
+// ロング表示とファイル情報関連
+// ---------------------------------------------------------------------------
+
+/// パーミッションを rwx 形式の文字列に変換する
+#[cfg(unix)]
+fn format_permissions(metadata: &fs::Metadata) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = metadata.permissions().mode();
+    let mut s = String::with_capacity(9);
+    let flags = [0o400,0o200,0o100, 0o040,0o020,0o010, 0o004,0o002,0o001];
+    for &f in &flags {
+        s.push(if mode & f != 0 { match f {
+            0o400|0o040|0o004 => 'r',
+            0o200|0o020|0o002 => 'w',
+            _ => 'x',
+        } } else { '-'});
+    }
+    s
+}
+
+#[cfg(not(unix))]
+fn format_permissions(_metadata: &fs::Metadata) -> String {
+    "rwxrwxrwx".to_string()
+}
+
+/// ロング表示用の整形（owner/group 幅を受け取り揃えて出力）
 fn format_long_entry_with_widths(path: &PathBuf, metadata: &fs::Metadata, color: &str, name: &str, user_w: usize, group_w: usize, size_w: usize) -> String {
     #[cfg(unix)]
     {
@@ -282,7 +423,7 @@ fn format_long_entry_with_widths(path: &PathBuf, metadata: &fs::Metadata, color:
         let user = get_user_by_uid(uid).and_then(|u| u.name().to_str().map(|s| s.to_string())).unwrap_or(uid.to_string());
         let group = get_group_by_gid(gid).and_then(|g| g.name().to_str().map(|s| s.to_string())).unwrap_or(gid.to_string());
 
-        // prepare display name; for symlink include target
+        // シンボリックリンクは "name -> target" で表示
         let display_name = if metadata.file_type().is_symlink() {
             match fs::read_link(path) {
                 Ok(target) => format!("{}{}{} -> {}", color, name, RESET, target.display()),
@@ -295,7 +436,7 @@ fn format_long_entry_with_widths(path: &PathBuf, metadata: &fs::Metadata, color:
         return format!("{}{} {:>3} {:<user_w$} {:<group_w$} {:>size_w$} {} {}", file_type, perms, nlink, user, group, size, mtime, display_name, user_w=user_w, group_w=group_w, size_w=size_w);
     }
 
-    // non-unix fallback
+    // 非 unix フォールバック
     let file_type = if metadata.is_dir() { 'd' } else { '-' };
     let perms = format_permissions(metadata);
     let size = metadata.len();
@@ -307,104 +448,23 @@ fn format_long_entry_with_widths(path: &PathBuf, metadata: &fs::Metadata, color:
     format!("{}{} {:>size_w$} {} {}", file_type, perms, size, mtime, display_name, size_w=size_w)
 }
 
+/// 実行可能ビット判定
 #[cfg(unix)]
-fn format_permissions(metadata: &fs::Metadata) -> String {
+fn is_executable(metadata: &fs::Metadata) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    let mode = metadata.permissions().mode();
-    let mut s = String::with_capacity(9);
-    let flags = [0o400,0o200,0o100, 0o040,0o020,0o010, 0o004,0o002,0o001];
-    for &f in &flags {
-        s.push(if mode & f != 0 { match f {
-            0o400|0o040|0o004 => 'r',
-            0o200|0o020|0o002 => 'w',
-            _ => 'x',
-        } } else { '-'});
-    }
-    s
+    metadata.permissions().mode() & 0o111 != 0
 }
 
 #[cfg(not(unix))]
-fn format_permissions(_metadata: &fs::Metadata) -> String {
-    "rwxrwxrwx".to_string()
+fn is_executable(_metadata: &fs::Metadata) -> bool {
+    false
 }
 
-fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
-    // map to 6x6x6 cube (16..231)
-    let r6 = (r as u16 * 5 / 255) as u8;
-    let g6 = (g as u16 * 5 / 255) as u8;
-    let b6 = (b as u16 * 5 / 255) as u8;
-    16 + 36 * r6 + 6 * g6 + b6
-}
+// ---------------------------------------------------------------------------
+// プロファイルを開くためのユーティリティ（open/xdg-open 等）
+// ---------------------------------------------------------------------------
 
-fn color_spec_to_escape(spec: &str) -> String {
-    // if it's already an escape seq
-    if spec.starts_with("\x1b[") {
-        return spec.to_string();
-    }
-
-    // hex: #RRGGBB
-    if spec.starts_with('#') && spec.len() == 7 {
-        if let (Ok(r), Ok(g), Ok(b)) = (
-            u8::from_str_radix(&spec[1..3], 16),
-            u8::from_str_radix(&spec[3..5], 16),
-            u8::from_str_radix(&spec[5..7], 16),
-        ) {
-            if supports_truecolor() {
-                return format!("\x1b[38;2;{};{};{}m", r, g, b);
-            } else {
-                let idx = rgb_to_ansi256(r, g, b);
-                return format!("\x1b[38;5;{}m", idx);
-            }
-        }
-    }
-
-    // rgb:R,G,B
-    if spec.to_lowercase().starts_with("rgb:") {
-        let rest = &spec[4..];
-        let parts: Vec<&str> = rest.split(',').collect();
-        if parts.len() == 3 {
-            if let (Ok(r), Ok(g), Ok(b)) = (parts[0].trim().parse::<u8>(), parts[1].trim().parse::<u8>(), parts[2].trim().parse::<u8>()) {
-                if supports_truecolor() {
-                    return format!("\x1b[38;2;{};{};{}m", r, g, b);
-                } else {
-                    let idx = rgb_to_ansi256(r, g, b);
-                    return format!("\x1b[38;5;{}m", idx);
-                }
-            }
-        }
-    }
-
-    // ansi:NNN (256-color index)
-    if spec.to_lowercase().starts_with("ansi:") {
-        if let Ok(idx) = spec[5..].trim().parse::<u8>() {
-            return format!("\x1b[38;5;{}m", idx);
-        }
-    }
-
-    // named color fallback
-    if let Some(code) = color_name_to_code(spec) {
-        return code.to_string();
-    }
-
-    DEFAULT_COLOR.to_string()
-}
-
-fn find_profile_path() -> Option<PathBuf> {
-    let paths = vec![
-        env::var("COLOR_RULES").ok().map(PathBuf::from),
-        Some(PathBuf::from("color_rules")),
-        env::var("HOME").ok().map(|h| PathBuf::from(h).join(".config/colorfuls/color_rules")),
-    ];
-
-    for opt in paths.into_iter().flatten() {
-        if opt.exists() {
-            return Some(opt);
-        }
-    }
-
-    None
-}
-
+/// 指定アプリでプロファイルファイルを開く
 fn open_profile_in_app(app: &str) -> io::Result<()> {
     if let Some(path) = find_profile_path() {
         #[cfg(target_os = "macos")]
@@ -423,7 +483,6 @@ fn open_profile_in_app(app: &str) -> io::Result<()> {
 
         #[cfg(not(target_os = "macos"))]
         {
-            // Try to execute the given application with the profile path as argument.
             match Command::new(app).arg(path).spawn() {
                 Ok(_) => return Ok(()),
                 Err(e) => {
@@ -438,6 +497,7 @@ fn open_profile_in_app(app: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// システムデフォルトでプロファイルを開く
 fn open_profile_default() -> io::Result<()> {
     if let Some(path) = find_profile_path() {
         #[cfg(target_os = "macos")]
@@ -452,7 +512,6 @@ fn open_profile_default() -> io::Result<()> {
 
         #[cfg(target_os = "linux")]
         {
-            // Prefer xdg-open when available
             if Command::new("xdg-open").arg(&path).status().is_ok() {
                 return Ok(());
             }
@@ -460,7 +519,6 @@ fn open_profile_default() -> io::Result<()> {
 
         #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         {
-            // Try $EDITOR if set
             if let Ok(editor) = env::var("EDITOR") {
                 if Command::new(editor).arg(&path).spawn().is_ok() {
                     return Ok(());
@@ -468,7 +526,6 @@ fn open_profile_default() -> io::Result<()> {
             }
         }
 
-        // Final fallback: try to spawn system default by invoking `open` (mac) or xdg-open (linux)
         #[cfg(target_os = "macos")]
         { let _ = Command::new("open").arg(&path).status(); }
         #[cfg(target_os = "linux")]
@@ -477,15 +534,4 @@ fn open_profile_default() -> io::Result<()> {
         eprintln!("No profile file found to open");
     }
     Ok(())
-}
-
-#[cfg(unix)]
-fn is_executable(metadata: &fs::Metadata) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    metadata.permissions().mode() & 0o111 != 0
-}
-
-#[cfg(not(unix))]
-fn is_executable(_metadata: &fs::Metadata) -> bool {
-    false
 }
