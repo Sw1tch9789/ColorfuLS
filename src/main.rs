@@ -14,6 +14,8 @@ use std::process::Command;
 
 use chrono::Local;
 use regex::Regex;
+
+#[cfg(unix)]
 use users::{get_group_by_gid, get_user_by_uid};
 
 /// リセット用 ANSI シーケンス
@@ -117,6 +119,11 @@ fn main() -> io::Result<()> {
                     let size = metadata.len();
                     max_user_w = max_user_w.max(user.len());
                     max_group_w = max_group_w.max(group.len());
+                    max_size_w = max_size_w.max(size.to_string().len());
+                }
+                #[cfg(not(unix))]
+                {
+                    let size = metadata.len();
                     max_size_w = max_size_w.max(size.to_string().len());
                 }
                 #[cfg(not(unix))]
@@ -399,8 +406,14 @@ fn format_long_entry_with_widths(path: &PathBuf, metadata: &fs::Metadata, color:
 
         let uid = metadata.uid();
         let gid = metadata.gid();
+        #[cfg(unix)]
         let user = get_user_by_uid(uid).and_then(|u| u.name().to_str().map(|s| s.to_string())).unwrap_or(uid.to_string());
+        #[cfg(not(unix))]
+        let user = uid.to_string();
+        #[cfg(unix)]
         let group = get_group_by_gid(gid).and_then(|g| g.name().to_str().map(|s| s.to_string())).unwrap_or(gid.to_string());
+        #[cfg(not(unix))]
+        let group = gid.to_string();
 
         // シンボリックリンクは "name -> target" で表示
         let display_name = if metadata.file_type().is_symlink() {
