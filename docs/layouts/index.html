@@ -1,0 +1,22 @@
+{{ define "main" }}
+  {{ $docsPage := or (site.GetPage "/ja/docs") (site.GetPage "/docs") -}}
+  {{ $tutorialPage := or (site.GetPage "/ja/docs/tutorial") (site.GetPage "/docs/tutorial") -}}
+  {{ $examplesPage := or (site.GetPage "/ja/docs/examples") (site.GetPage "/docs/examples") -}}
+  {{ $referencePage := or (site.GetPage "/ja/docs/reference") (site.GetPage "/docs/reference") -}}
+  <section class="hero">
+    <h1>{{ .Site.Title }}</h1>
+    <div class="content">
+      {{ .Content }}
+    </div>
+  </section>
+
+  <section class="card" style="padding: 1.25rem;">
+    <h2>Jump in</h2>
+    <ul>
+      <li><a href="{{ with $docsPage }}{{ .RelPermalink }}{{ else }}/docs/{{ end }}">Documentation</a></li>
+      <li><a href="{{ with $tutorialPage }}{{ .RelPermalink }}{{ else }}/docs/tutorial/{{ end }}">Tutorial</a></li>
+      <li><a href="{{ with $examplesPage }}{{ .RelPermalink }}{{ else }}/docs/examples/{{ end }}">Examples</a></li>
+      <li><a href="{{ with $referencePage }}{{ .RelPermalink }}{{ else }}/docs/reference/{{ end }}">Reference</a></li>
+    </ul>
+  </section>
+{{ end }}
