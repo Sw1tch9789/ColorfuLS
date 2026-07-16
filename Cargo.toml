@@ -8,3 +8,4 @@ name = "cols"
 path = "src/main.rs"
 
 [dependencies]
+regex = "1.10"
