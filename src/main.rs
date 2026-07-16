@@ -4,6 +4,8 @@ use std::io;
 use std::path::PathBuf;
 use std::process::Command;
 use regex::Regex;
+use chrono::Local;
+use users::{get_user_by_uid, get_group_by_gid};
 
 const RESET: &str = "\x1b[0m";
 const DIRECTORY_COLOR: &str = "\x1b[34m";
@@ -229,19 +231,42 @@ fn supports_truecolor() -> bool {
 }
 
 fn format_long_entry(path: &PathBuf, metadata: &fs::Metadata, color: &str, name: &str) -> String {
-    let file_type = if metadata.is_dir() {
-        'd'
-    } else if metadata.file_type().is_symlink() {
-        'l'
-    } else {
-        '-'
-    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let file_type = if metadata.is_dir() {
+            'd'
+        } else if metadata.file_type().is_symlink() {
+            'l'
+        } else {
+            '-'
+        };
 
+        let perms = format_permissions(metadata);
+        let nlink = metadata.nlink();
+        let size = metadata.len();
+        let mtime = metadata.modified().ok().map(|t| {
+            let dt: chrono::DateTime<Local> = t.into();
+            dt.format("%b %e %H:%M").to_string()
+        }).unwrap_or_else(|| "-".to_string());
+
+        let uid = metadata.uid();
+        let gid = metadata.gid();
+        let user = get_user_by_uid(uid).and_then(|u| u.name().to_str().map(|s| s.to_string())).unwrap_or(uid.to_string());
+        let group = get_group_by_gid(gid).and_then(|g| g.name().to_str().map(|s| s.to_string())).unwrap_or(gid.to_string());
+
+        return format!("{}{} {:>3} {:<8} {:<8} {:>8} {} {}{}", file_type, perms, nlink, user, group, size, mtime, color, name);
+    }
+
+    // non-unix fallback
+    let file_type = if metadata.is_dir() { 'd' } else { '-' };
     let perms = format_permissions(metadata);
     let size = metadata.len();
-    let mtime = metadata.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
-
-    format!("{}{} {:>8} {:>12} {}{}", file_type, perms, size, mtime, color, name)
+    let mtime = metadata.modified().ok().map(|t| {
+        let dt: chrono::DateTime<Local> = t.into();
+        dt.format("%b %e %H:%M").to_string()
+    }).unwrap_or_else(|| "-".to_string());
+    format!("{}{} {:>8} {} {}{}", file_type, perms, size, mtime, color, name)
 }
 
 #[cfg(unix)]
