@@ -219,6 +219,21 @@
 			</tr>
 	</tbody>
 </table>
+<h2 id="仕様メモgithubassetsspecmd">仕様メモ（.github/assets/spec.md）</h2>
+<p><code>.github/assets/spec.md</code> で定義されている入出力仕様の要点は次のとおりです。</p>
+<ul>
+<li><code>cols [OPTIONS] [FILE]</code>
+<ul>
+<li>指定ディレクトリ（省略時はカレントディレクトリ）の内容を、プロファイルに基づいて色付け表示する。</li>
+</ul>
+</li>
+<li><code>cols --profile [application]</code>
+<ul>
+<li>プロファイルを開く。</li>
+</ul>
+</li>
+</ul>
+<p>本実装では <code>--profile</code> に加えて <code>-pf</code> も同等のショートカットとして利用できます。</p>
 <h2 id="色指定">色指定</h2>
 <p><code>color_rules</code> では次の形式が使えます。</p>
 <ul>
@@ -228,7 +243,23 @@
 <li>色名: <code>red</code>, <code>green</code>, <code>blue</code>, <code>magenta</code>, <code>cyan</code>, <code>yellow</code></li>
 <li>既存の ANSI エスケープ列</li>
 </ul>
-<h2 id="内部の考え方">内部の考え方</h2>
+<h2 id="color_rules-の記述方法">color_rules の記述方法</h2>
+<p><code>color_rules</code> は 1 行 1 ルールで、次の形式で書きます。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>[dir:|file:]&lt;regex&gt; =&gt; &lt;color-or-ANSI&gt;
+</span></span></code></pre></div><ul>
+<li><code>dir:</code> を付けるとディレクトリにだけ適用</li>
+<li><code>file:</code> を付けるとファイルにだけ適用</li>
+<li>接頭辞なしはファイルとディレクトリの両方に適用</li>
+<li><code>#</code> から始まる行はコメント</li>
+<li>空行は無視</li>
+</ul>
+<p>例:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>dir:^docs$ =&gt; cyan
+</span></span><span style="display:flex;"><span>file:^.*\.rs$ =&gt; magenta
+</span></span><span style="display:flex;"><span>.*README.* =&gt; magenta
+</span></span><span style="display:flex;"><span>^\.gitmodules$ =&gt; yellow
+</span></span><span style="display:flex;"><span>.*cargo.* =&gt; #66CDAA
+</span></span></code></pre></div><h2 id="内部の考え方">内部の考え方</h2>
 <ul>
 <li><code>parse_rule_line</code> がルール行を分解します。</li>
 <li><code>color_spec_to_escape</code> が色指定を ANSI 表現へ変換します。</li>
