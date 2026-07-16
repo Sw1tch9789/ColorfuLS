@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::process::Command;
 use regex::Regex;
 
 const RESET: &str = "\x1b[0m";
@@ -25,6 +26,19 @@ struct Rule {
 }
 
 fn main() -> io::Result<()> {
+    // CLI: support `--profile <application>` to open the profile file in an application
+    let mut args = env::args().skip(1);
+    if let Some(flag) = args.next() {
+        if flag == "--profile" {
+            if let Some(app) = args.next() {
+                return open_profile_in_app(&app);
+            } else {
+                eprintln!("Usage: cols --profile <application>");
+                return Ok(());
+            }
+        }
+    }
+
     let rules = load_rules().unwrap_or_default();
 
     let cwd = env::current_dir()?;
@@ -171,6 +185,55 @@ fn load_rules() -> io::Result<Vec<Rule>> {
     }
 
     Ok(Vec::new())
+}
+
+fn find_profile_path() -> Option<PathBuf> {
+    let paths = vec![
+        env::var("COLOR_RULES").ok().map(PathBuf::from),
+        Some(PathBuf::from("color_rules")),
+        env::var("HOME").ok().map(|h| PathBuf::from(h).join(".config/colorfuls/color_rules")),
+    ];
+
+    for opt in paths.into_iter().flatten() {
+        if opt.exists() {
+            return Some(opt);
+        }
+    }
+
+    None
+}
+
+fn open_profile_in_app(app: &str) -> io::Result<()> {
+    if let Some(path) = find_profile_path() {
+        #[cfg(target_os = "macos")]
+        {
+            let status = Command::new("open").arg("-a").arg(app).arg(path).status();
+            match status {
+                Ok(s) => {
+                    if !s.success() {
+                        eprintln!("Failed to open profile with {}", app);
+                    }
+                }
+                Err(e) => eprintln!("Error launching open: {}", e),
+            }
+            return Ok(());
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        {
+            // Try to execute the given application with the profile path as argument.
+            match Command::new(app).arg(path).spawn() {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    eprintln!("Failed to launch {}: {}", app, e);
+                    return Ok(());
+                }
+            }
+        }
+    } else {
+        eprintln!("No profile file found to open");
+    }
+    Ok(())
 }
 
 #[cfg(unix)]
