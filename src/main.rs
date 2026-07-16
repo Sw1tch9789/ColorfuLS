@@ -90,10 +90,7 @@ fn color_for_entry(path: &PathBuf, rules: &Vec<Rule>) -> String {
         return HIDDEN_COLOR.to_string();
     }
 
-    // If the name contains "cargo", color it green
-    if name.contains("cargo") {
-        return EXECUTABLE_COLOR.to_string();
-    }
+    // cargo handled via profile rules (color_rules)
 
     if let Ok(metadata) = fs::symlink_metadata(path) {
         if metadata.file_type().is_symlink() {

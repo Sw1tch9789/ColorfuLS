@@ -17,3 +17,6 @@ file:^.*\.rs$ => magenta
 
 # .gitmodules highlighted in yellow
 ^\.gitmodules$ => yellow
+
+# any file/directory containing "cargo" -> green
+.*cargo.* => green
