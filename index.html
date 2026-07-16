@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>ColorfuLS Documentation</title>
+	<style>
+		:root {
+			color-scheme: light;
+		}
+
+		body {
+			font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+			max-width: 980px;
+			margin: 0 auto;
+			padding: 2rem;
+			line-height: 1.7;
+			color: #111827;
+			background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+		}
+
+		h1, h2, h3 {
+			color: #0f172a;
+		}
+
+		h1 {
+			margin-top: 0;
+			padding-bottom: 0.5rem;
+			border-bottom: 3px solid #cbd5e1;
+		}
+
+		section {
+			background: rgba(255, 255, 255, 0.88);
+			border: 1px solid #e2e8f0;
+			border-radius: 16px;
+			padding: 1.25rem 1.5rem;
+			margin: 1.25rem 0;
+			box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+		}
+
+		pre {
+			background: #0f172a;
+			color: #e2e8f0;
+			padding: 1rem;
+			border-radius: 12px;
+			overflow-x: auto;
+		}
+
+		code {
+			color: #b91c1c;
+			background: #fef2f2;
+			padding: 0.1rem 0.3rem;
+			border-radius: 4px;
+		}
+
+		pre code {
+			color: inherit;
+			background: transparent;
+			padding: 0;
+		}
+
+		table {
+			width: 100%;
+			border-collapse: collapse;
+			margin-top: 1rem;
+		}
+
+		th, td {
+			border: 1px solid #cbd5e1;
+			padding: 0.75rem;
+			vertical-align: top;
+		}
+
+		th {
+			background: #e2e8f0;
+			text-align: left;
+		}
+
+		ul, ol {
+			padding-left: 1.4rem;
+		}
+
+		.badge {
+			margin-bottom: 1rem;
+		}
+
+		.lead {
+			font-size: 1.05rem;
+			color: #334155;
+		}
+	</style>
+</head>
+<body>
+	<div class="badge">
+		<a href="https://coveralls.io/repos/github/Sw1tch9789/ColorfuLS?branch=main">
+			<img src="https://coveralls.io/repos/github/Sw1tch9789/ColorfuLS/badge.svg?branch=main" alt="Coverage Status">
+		</a>
+	</div>
+
+	<h1>ColorfuLS</h1>
+	<p class="lead">ColorfuLS は、色付きのファイル一覧をターミナルに出力する Rust 製 CLI ツールです。README.md の内容に加えて、現在の仕様、チュートリアル、実行例、内部仕様をまとめています。</p>
+
+	<section>
+		<h2>現在の仕様</h2>
+		<ul>
+			<li><code>cols</code> コマンドでカレントディレクトリの一覧を表示します。</li>
+			<li><code>color_rules</code> プロファイルを読み込み、ファイル名やディレクトリ名に応じて色を決定します。</li>
+			<li><code>-a</code> / <code>--all</code> で隠しファイルを含めて表示します。</li>
+			<li><code>-l</code> / <code>--long</code> で詳細情報を表示します。</li>
+			<li>ディレクトリ、シンボリックリンク、実行可能ファイルを自動判定して色分けします。</li>
+			<li>Unix ではユーザー名とグループ名を表示し、Windows では数値 UID/GID にフォールバックします。</li>
+			<li>色指定は 16 進、rgb、ansi、色名、既存の ANSI エスケープ列に対応します。</li>
+		</ul>
+	</section>
+
+	<section>
+		<h2>README.md の要点</h2>
+		<p>README.md では次の点が案内されています。</p>
+		<ul>
+			<li>ColorfuLS はディレクトリやファイル、拡張子ごとに色を設定してリスト表示できます。</li>
+			<li>プロファイル設定により、色付けルールを外部化できます。</li>
+			<li>コマンドは <code>cols [OPTIONS] [FILE]</code> の形式で実行します。</li>
+		</ul>
+	</section>
+
+	<section>
+		<h2>インストール</h2>
+		<p>Rust と Cargo があれば、次のコマンドでビルドできます。</p>
+		<pre><code>cargo build --release</code></pre>
+		<p>実行ファイルは <code>target/release/cols</code> に生成されます。</p>
+	</section>
+
+	<section>
+		<h2>使い方</h2>
+		<pre><code>cols [OPTIONS] [FILE]</code></pre>
+		<table>
+			<thead>
+				<tr><th>オプション</th><th>説明</th></tr>
+			</thead>
+			<tbody>
+				<tr><td><code>-a</code> / <code>--all</code></td><td>隠しファイルを含むすべてのエントリを表示します。</td></tr>
+				<tr><td><code>-l</code> / <code>--long</code></td><td>詳細表示を行い、権限、リンク数、所有者、グループ、サイズ、更新時刻を表示します。</td></tr>
+				<tr><td><code>--profile</code></td><td>プロファイルを開くために使用します。</td></tr>
+			</tbody>
+		</table>
+	</section>
+
+	<section>
+		<h2>チュートリアル</h2>
+		<ol>
+			<li>リポジトリをクローンします。</li>
+			<li><code>cargo build --release</code> を実行してビルドします。</li>
+			<li><code>./target/release/cols</code> を実行して一覧を表示します。</li>
+			<li><code>./target/release/cols -a</code> で隠しファイルも表示します。</li>
+			<li><code>./target/release/cols -l</code> で詳細表示を確認します。</li>
+			<li><code>color_rules</code> を編集して、独自の配色を試します。</li>
+		</ol>
+		<p><code>COLOR_RULES</code> 環境変数を設定すると、プロファイルの読み込み先を切り替えられます。</p>
+	</section>
+
+	<section>
+		<h2>実行例</h2>
+		<h3>1. デフォルト表示</h3>
+		<pre><code>$ ./target/release/cols
+README.md
+Cargo.toml
+src
+</code></pre>
+
+		<h3>2. 隠しファイルを含む表示</h3>
+		<pre><code>$ ./target/release/cols -a
+.coverage
+Cargo.toml
+README.md
+src
+</code></pre>
+
+		<h3>3. 詳細表示</h3>
+		<pre><code>$ ./target/release/cols -l
+-rw-r--r--  1 user group  123 Apr 12 14:15 README.md
+drwxr-xr-x  3 user group 4096 Apr 12 13:50 src
+</code></pre>
+
+		<h3>4. プロファイル例</h3>
+		<pre><code>dir:.*README.* => magenta
+file:^.*\.rs$ => \x1b[32m
+\.md$ => \x1b[33m
+\.#.* => \x1b[90m</code></pre>
+		<p>この設定では README をマゼンタ、Rust ファイルを緑、Markdown ファイルを黄色、隠しファイルを暗い灰色で表示します。</p>
+	</section>
+
+	<section>
+		<h2>内部仕様</h2>
+		<ul>
+			<li><code>parse_rule_line</code> がプロファイル行を解析します。</li>
+			<li><code>color_spec_to_escape</code> が色指定を ANSI エスケープに変換します。</li>
+			<li><code>color_for_entry</code> がルールとファイル種別から表示色を決定します。</li>
+			<li><code>format_long_entry_with_widths</code> がロング表示の整形を担当します。</li>
+			<li>関数単位のテストを追加して、返り値の妥当性を検証しています。</li>
+		</ul>
+	</section>
+
+	<section>
+		<h2>今後の拡張候補</h2>
+		<ul>
+			<li>Windows 対応のさらなる強化</li>
+			<li>複数ディレクトリ同時表示</li>
+			<li>配色ルールの優先順位制御の改善</li>
+			<li>静的サイトとしての整備</li>
+		</ul>
+	</section>
+</body>
+</html>
