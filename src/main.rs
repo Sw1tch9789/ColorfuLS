@@ -70,13 +70,40 @@ fn main() -> io::Result<()> {
 
     entries.sort_by_key(|entry| entry.file_name());
 
+    // If long format, compute column widths for owner/group/size
+    let (mut max_user_w, mut max_group_w, mut max_size_w) = (0usize, 0usize, 0usize);
+    if long_format {
+        for entry in &entries {
+            let path = entry.path();
+            if let Ok(metadata) = fs::symlink_metadata(&path) {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    let uid = metadata.uid();
+                    let gid = metadata.gid();
+                    let user = get_user_by_uid(uid).and_then(|u| u.name().to_str().map(|s| s.to_string())).unwrap_or(uid.to_string());
+                    let group = get_group_by_gid(gid).and_then(|g| g.name().to_str().map(|s| s.to_string())).unwrap_or(gid.to_string());
+                    let size = metadata.len();
+                    max_user_w = max_user_w.max(user.len());
+                    max_group_w = max_group_w.max(group.len());
+                    max_size_w = max_size_w.max(size.to_string().len());
+                }
+                #[cfg(not(unix))]
+                {
+                    let size = metadata.len();
+                    max_size_w = max_size_w.max(size.to_string().len());
+                }
+            }
+        }
+    }
+
     for entry in entries {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
         let color = color_for_entry(&path, &rules);
         if long_format {
             if let Ok(metadata) = fs::symlink_metadata(&path) {
-                println!("{}{}{}", format_long_entry(&path, &metadata, &color, &name), RESET, "");
+                println!("{}{}", format_long_entry_with_widths(&path, &metadata, &color, &name, max_user_w, max_group_w, max_size_w), RESET);
             } else {
                 println!("{}{}{}", color, name, RESET);
             }
@@ -230,7 +257,7 @@ fn supports_truecolor() -> bool {
     false
 }
 
-fn format_long_entry(path: &PathBuf, metadata: &fs::Metadata, color: &str, name: &str) -> String {
+fn format_long_entry_with_widths(path: &PathBuf, metadata: &fs::Metadata, color: &str, name: &str, user_w: usize, group_w: usize, size_w: usize) -> String {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -255,7 +282,17 @@ fn format_long_entry(path: &PathBuf, metadata: &fs::Metadata, color: &str, name:
         let user = get_user_by_uid(uid).and_then(|u| u.name().to_str().map(|s| s.to_string())).unwrap_or(uid.to_string());
         let group = get_group_by_gid(gid).and_then(|g| g.name().to_str().map(|s| s.to_string())).unwrap_or(gid.to_string());
 
-        return format!("{}{} {:>3} {:<8} {:<8} {:>8} {} {}{}", file_type, perms, nlink, user, group, size, mtime, color, name);
+        // prepare display name; for symlink include target
+        let display_name = if metadata.file_type().is_symlink() {
+            match fs::read_link(path) {
+                Ok(target) => format!("{}{}{} -> {}", color, name, RESET, target.display()),
+                Err(_) => format!("{}{}{}", color, name, RESET),
+            }
+        } else {
+            format!("{}{}{}", color, name, RESET)
+        };
+
+        return format!("{}{} {:>3} {:<user_w$} {:<group_w$} {:>size_w$} {} {}", file_type, perms, nlink, user, group, size, mtime, display_name, user_w=user_w, group_w=group_w, size_w=size_w);
     }
 
     // non-unix fallback
@@ -266,7 +303,8 @@ fn format_long_entry(path: &PathBuf, metadata: &fs::Metadata, color: &str, name:
         let dt: chrono::DateTime<Local> = t.into();
         dt.format("%b %e %H:%M").to_string()
     }).unwrap_or_else(|| "-".to_string());
-    format!("{}{} {:>8} {} {}{}", file_type, perms, size, mtime, color, name)
+    let display_name = format!("{}{}{}", color, name, RESET);
+    format!("{}{} {:>size_w$} {} {}", file_type, perms, size, mtime, display_name, size_w=size_w)
 }
 
 #[cfg(unix)]
