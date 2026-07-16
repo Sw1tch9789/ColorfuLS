@@ -8,7 +8,10 @@
 色付け設定は、プロファイルを参照して行う。
 
 ## Usage
-cols [OPTIONS] [FILE]
+- `cols [OPTIONS] [FILE]`
+	- 指定ディレクトリ（省略時はカレントディレクトリ）の内容を、プロファイルに基づいて色付け表示します。
+- `cols --profile [application]`
+	- プロファイルを開きます（`-pf` でも可）。
 
 ## Options
 ```
@@ -16,15 +19,6 @@ cols [OPTIONS] [FILE]
 -a 隠しファイルを含むすべてのファイルやディレクトリを表示します。
 --profile / -pf プロファイルを開きます。
 ```
-
-## Spec 要点
-
-`.github/assets/spec.md` の要点:
-
-- `cols [OPTIONS] [FILE]`
-	- 指定ディレクトリ（省略時はカレントディレクトリ）の内容を、プロファイルに基づいて色付け表示します。
-- `cols --profile [application]`
-	- プロファイルを開きます（`-pf` でも可）。
 
 ## color_rules の書き方
 
