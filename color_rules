@@ -1,0 +1,19 @@
+# color_rules - example profile for ColorfuLS
+# Format per line: [dir:|file:]<regex> => <color-or-ANSI>
+# Lines starting with # are comments. Empty lines are ignored.
+# Examples:
+#   dir:^docs$ => cyan
+#   file:^.*\.rs$ => magenta
+# Color names: black, red, green, yellow, blue, magenta, cyan, white, bright_black/grey
+
+# Make the docs directory appear cyan
+dir:^docs$ => cyan
+
+# Rust source files in the repository -> magenta
+file:^.*\.rs$ => magenta
+
+# README-like files -> magenta
+.*README.* => magenta
+
+# .gitmodules highlighted in yellow
+^\.gitmodules$ => yellow
