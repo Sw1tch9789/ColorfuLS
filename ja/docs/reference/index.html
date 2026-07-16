@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-	<meta name="generator" content="Hugo 0.163.1">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <title>ColorfuLS</title>
-  <meta name="description" content="ColorfuLS documentation">
+  <title>リファレンス | ColorfuLS</title>
+  <meta name="description" content="オプションと内部仕様の要点">
   <style>
     :root {
       color-scheme: light;
@@ -194,22 +193,50 @@
 
     <main>
       
-  <section class="hero">
-    <h1>ColorfuLS</h1>
-    <div class="content">
-      
-    </div>
-  </section>
+  <article class="content">
+    <h1>リファレンス</h1>
+    <p style="color: #475569;">オプションと内部仕様の要点</p>
+    <h2 id="オプション">オプション</h2>
+<table>
+	<thead>
+			<tr>
+					<th>オプション</th>
+					<th>説明</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>-a</code>, <code>--all</code></td>
+					<td>隠しファイルを含むすべてのエントリを表示します。</td>
+			</tr>
+			<tr>
+					<td><code>-l</code>, <code>--long</code></td>
+					<td>詳細情報を表示します。</td>
+			</tr>
+			<tr>
+					<td><code>--profile</code>, <code>-pf</code></td>
+					<td>プロファイルファイルを開きます。</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="色指定">色指定</h2>
+<p><code>color_rules</code> では次の形式が使えます。</p>
+<ul>
+<li><code>#RRGGBB</code></li>
+<li><code>rgb:R,G,B</code></li>
+<li><code>ansi:N</code></li>
+<li>色名: <code>red</code>, <code>green</code>, <code>blue</code>, <code>magenta</code>, <code>cyan</code>, <code>yellow</code></li>
+<li>既存の ANSI エスケープ列</li>
+</ul>
+<h2 id="内部の考え方">内部の考え方</h2>
+<ul>
+<li><code>parse_rule_line</code> がルール行を分解します。</li>
+<li><code>color_spec_to_escape</code> が色指定を ANSI 表現へ変換します。</li>
+<li><code>color_for_entry</code> がファイル種別とルールの両方を見て色を決めます。</li>
+<li><code>format_long_entry_with_widths</code> が <code>-l</code> 表示を整形します。</li>
+</ul>
 
-  <section class="card" style="padding: 1.25rem;">
-    <h2>Jump in</h2>
-    <ul>
-      <li><a href="/ColorfuLS/ja/docs/">Documentation</a></li>
-      <li><a href="/ColorfuLS/ja/docs/tutorial/">Tutorial</a></li>
-      <li><a href="/ColorfuLS/ja/docs/examples/">Examples</a></li>
-      <li><a href="/ColorfuLS/ja/docs/reference/">Reference</a></li>
-    </ul>
-  </section>
+  </article>
 
     </main>
   </div>

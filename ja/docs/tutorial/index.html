@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-	<meta name="generator" content="Hugo 0.163.1">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <title>ColorfuLS</title>
-  <meta name="description" content="ColorfuLS documentation">
+  <title>チュートリアル | ColorfuLS</title>
+  <meta name="description" content="ColorfuLS を最初から試すための手順">
   <style>
     :root {
       color-scheme: light;
@@ -194,22 +193,34 @@
 
     <main>
       
-  <section class="hero">
-    <h1>ColorfuLS</h1>
-    <div class="content">
-      
-    </div>
-  </section>
+  <article class="content">
+    <h1>チュートリアル</h1>
+    <p style="color: #475569;">ColorfuLS を最初から試すための手順</p>
+    <h2 id="1-ビルド">1. ビルド</h2>
+<p>まずは Rust の開発環境を用意し、以下を実行します。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>cargo build --release
+</span></span></code></pre></div><p>実行ファイルは <code>target/release/cols</code> に生成されます。</p>
+<h2 id="2-そのまま表示する">2. そのまま表示する</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>./target/release/cols
+</span></span></code></pre></div><p>現在のディレクトリのファイルを、色付きで一覧表示します。</p>
+<h2 id="3-隠しファイルも表示する">3. 隠しファイルも表示する</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>./target/release/cols -a
+</span></span></code></pre></div><p><code>.</code> で始まるファイルやディレクトリも表示対象に含めます。</p>
+<h2 id="4-詳細表示を使う">4. 詳細表示を使う</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>./target/release/cols -l
+</span></span></code></pre></div><p>詳細表示では、権限、リンク数、所有者、グループ、サイズ、更新時刻が出ます。</p>
+<h2 id="5-color_rules-を作る">5. color_rules を作る</h2>
+<p>プロジェクト直下に <code>color_rules</code> を置くか、<code>COLOR_RULES</code> 環境変数で場所を指定します。</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>dir:.*README.* =&gt; magenta
+</span></span><span style="display:flex;"><span>file:^.*\.rs$ =&gt; \x1b[32m
+</span></span><span style="display:flex;"><span>\.md$ =&gt; \x1b[33m
+</span></span></code></pre></div><p>この例では、README をマゼンタ、Rust ファイルを緑、Markdown を黄色にします。</p>
+<h2 id="6-プロファイルを開く">6. プロファイルを開く</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>./target/release/cols --profile
+</span></span><span style="display:flex;"><span>./target/release/cols -pf
+</span></span></code></pre></div><p>どちらもプロファイルファイルを開くための入力として扱われます。</p>
 
-  <section class="card" style="padding: 1.25rem;">
-    <h2>Jump in</h2>
-    <ul>
-      <li><a href="/ColorfuLS/ja/docs/">Documentation</a></li>
-      <li><a href="/ColorfuLS/ja/docs/tutorial/">Tutorial</a></li>
-      <li><a href="/ColorfuLS/ja/docs/examples/">Examples</a></li>
-      <li><a href="/ColorfuLS/ja/docs/reference/">Reference</a></li>
-    </ul>
-  </section>
+  </article>
 
     </main>
   </div>
