@@ -1,0 +1,17 @@
+{{ define "main" }}
+  <section class="hero">
+    <h1>{{ .Title }}</h1>
+    <div class="content">
+      {{ .Content }}
+    </div>
+  </section>
+
+  <section class="card" style="padding: 1.25rem;">
+    <h2>Pages</h2>
+    <ul>
+      {{ range .Pages.ByWeight }}
+        <li><a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>{{ with .Description }} - {{ . }}{{ end }}</li>
+      {{ end }}
+    </ul>
+  </section>
+{{ end }}

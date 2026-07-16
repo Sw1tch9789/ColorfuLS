@@ -1,27 +1,33 @@
-baseURL = 'https://example.org/'
-title = 'My New Hugo Project'
-theme = 'docsy'
-locale = 'en-us'
+baseURL = 'https://sw1tch9789.github.io/ColorfuLS/'
+title = 'ColorfuLS'
 languageCode = 'ja'
+defaultContentLanguage = 'ja'
+defaultContentLanguageInSubdir = false
 
-# Docsyの基本設定
 enableGitInfo = true
 
 [params]
-description = "Documentation site"
+description = "ColorfuLS documentation"
 
-# メニュー設定
+[params.ui]
+sidebar_menu_compact = false
+ul_show = 1
+
 [[menu.main]]
 name = "Documentation"
 url = "/docs/"
 weight = 10
 
 [[menu.main]]
-name = "Blog"
-url = "/blog/"
+name = "Tutorial"
+url = "/docs/tutorial/"
 weight = 20
 
-# Docsyのパラメータ
-[params.ui]
-sidebar_menu_compact = false
-ul_show = 1
+[[menu.main]]
+name = "Examples"
+url = "/docs/examples/"
+weight = 30
+
+[languages.ja]
+languageName = "Japanese"
+weight = 1
