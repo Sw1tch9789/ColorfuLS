@@ -180,7 +180,13 @@ fn load_rules() -> io::Result<Vec<Rule>> {
                 if let Some((pat, color, target)) = parse_rule_line(line) {
                     match Regex::new(&pat) {
                         Ok(re) => rules.push(Rule { re, color, target }),
-                        Err(e) => eprintln!("Skipping invalid regex on {}:{} ({})", opt.display(), i+1, e),
+                        Err(e) => {
+                            // Try compiling with case-insensitive flag via builder fallback
+                            match regex::RegexBuilder::new(&pat).case_insensitive(true).build() {
+                                Ok(re2) => rules.push(Rule { re: re2, color, target }),
+                                Err(e2) => eprintln!("Skipping invalid regex on {}:{} ({})", opt.display(), i+1, e2),
+                            }
+                        }
                     }
                 } else {
                     eprintln!("Skipping malformed rule on {}:{}", opt.display(), i+1);
