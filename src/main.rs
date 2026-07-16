@@ -58,7 +58,7 @@ struct Rule {
 /// - `-l/--long` で詳細表示
 fn main() -> io::Result<()> {
     // 引数収集
-    let mut args_vec: Vec<String> = env::args().skip(1).collect();
+        let args_vec: Vec<String> = env::args().skip(1).collect();
 
     // プロファイルを開くオプション（優先）
     if let Some(pos) = args_vec.iter().position(|a| a == "--profile" || a == "-pf") {
@@ -436,16 +436,19 @@ fn format_long_entry_with_widths(path: &PathBuf, metadata: &fs::Metadata, color:
         return format!("{}{} {:>3} {:<user_w$} {:<group_w$} {:>size_w$} {} {}", file_type, perms, nlink, user, group, size, mtime, display_name, user_w=user_w, group_w=group_w, size_w=size_w);
     }
 
-    // 非 unix フォールバック
-    let file_type = if metadata.is_dir() { 'd' } else { '-' };
-    let perms = format_permissions(metadata);
-    let size = metadata.len();
-    let mtime = metadata.modified().ok().map(|t| {
-        let dt: chrono::DateTime<Local> = t.into();
-        dt.format("%b %e %H:%M").to_string()
-    }).unwrap_or_else(|| "-".to_string());
-    let display_name = format!("{}{}{}", color, name, RESET);
-    format!("{}{} {:>size_w$} {} {}", file_type, perms, size, mtime, display_name, size_w=size_w)
+    #[cfg(not(unix))]
+    {
+        // 非 unix フォールバック
+        let file_type = if metadata.is_dir() { 'd' } else { '-' };
+        let perms = format_permissions(metadata);
+        let size = metadata.len();
+        let mtime = metadata.modified().ok().map(|t| {
+            let dt: chrono::DateTime<Local> = t.into();
+            dt.format("%b %e %H:%M").to_string()
+        }).unwrap_or_else(|| "-".to_string());
+        let display_name = format!("{}{}{}", color, name, RESET);
+        return format!("{}{} {:>size_w$} {} {}", file_type, perms, size, mtime, display_name, size_w=size_w);
+    }
 }
 
 /// 実行可能ビット判定
@@ -526,10 +529,7 @@ fn open_profile_default() -> io::Result<()> {
             }
         }
 
-        #[cfg(target_os = "macos")]
-        { let _ = Command::new("open").arg(&path).status(); }
-        #[cfg(target_os = "linux")]
-        { let _ = Command::new("xdg-open").arg(&path).status(); }
+        // フォールバック呼び出しは上で環境別に既に処理しているためここでは不要
     } else {
         eprintln!("No profile file found to open");
     }
