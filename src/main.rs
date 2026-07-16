@@ -68,7 +68,7 @@ fn main() -> io::Result<()> {
         })
         .collect::<Vec<_>>();
 
-    entries.sort_by_key(|entry| entry.file_name());
+    entries.sort_by_key(|entry| entry.file_name().to_string_lossy().to_lowercase());
 
     // If long format, compute column widths for owner/group/size
     let (mut max_user_w, mut max_group_w, mut max_size_w) = (0usize, 0usize, 0usize);
