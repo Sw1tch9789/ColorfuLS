@@ -1,0 +1,8 @@
+.git
+.gitmodules
+.github
+target
+docs/.hugo_build.lock
+docs/themes
+docs/public/.git
+**/.DS_Store

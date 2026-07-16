@@ -1,0 +1,15 @@
+FROM nginx:1.27-alpine
+
+ARG VERSION=dev
+ARG GIT_REVISION=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="ColorfuLS Docs" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.source="https://github.com/Sw1tch9789/ColorfuLS"
+
+COPY docs/public/ /usr/share/nginx/html/
+
+EXPOSE 80
