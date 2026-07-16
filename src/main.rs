@@ -186,13 +186,7 @@ fn find_profile_path() -> Option<PathBuf> {
         env::var("HOME").ok().map(|h| PathBuf::from(h).join(".config/colorfuls/color_rules")),
     ];
 
-    for opt in paths.into_iter().flatten() {
-        if opt.exists() {
-            return Some(opt);
-        }
-    }
-
-    None
+    paths.into_iter().flatten().find(|opt| opt.exists())
 }
 
 /// プロファイルを読み込み、正規表現とルールリストを返す
@@ -202,30 +196,27 @@ fn load_rules() -> io::Result<Vec<Rule>> {
         Some(PathBuf::from("color_rules")),
         env::var("HOME").ok().map(|h| PathBuf::from(h).join(".config/colorfuls/color_rules")),
     ];
-
-    for opt in paths.into_iter().flatten() {
-        if opt.exists() {
-            let text = fs::read_to_string(&opt)?;
-            let mut rules = Vec::new();
-            for (i, raw) in text.lines().enumerate() {
-                let line = raw.trim();
-                if line.is_empty() || line.starts_with('#') {
-                    continue;
-                }
-                if let Some((pat, color, target)) = parse_rule_line(line) {
-                    match regex::RegexBuilder::new(&pat).case_insensitive(true).build() {
-                        Ok(re) => rules.push(Rule { re, color, target }),
-                        Err(e) => eprintln!("Skipping invalid regex on {}:{} ({})", opt.display(), i+1, e),
-                    }
-                } else {
-                    eprintln!("Skipping malformed rule on {}:{}", opt.display(), i+1);
-                }
+    if let Some(opt) = paths.into_iter().flatten().find(|opt| opt.exists()) {
+        let text = fs::read_to_string(&opt)?;
+        let mut rules = Vec::new();
+        for (i, raw) in text.lines().enumerate() {
+            let line = raw.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
             }
-            return Ok(rules);
+            if let Some((pat, color, target)) = parse_rule_line(line) {
+                match regex::RegexBuilder::new(&pat).case_insensitive(true).build() {
+                    Ok(re) => rules.push(Rule { re, color, target }),
+                    Err(e) => eprintln!("Skipping invalid regex on {}:{} ({})", opt.display(), i+1, e),
+                }
+            } else {
+                eprintln!("Skipping malformed rule on {}:{}", opt.display(), i+1);
+            }
         }
+        Ok(rules)
+    } else {
+        Ok(Vec::new())
     }
-
-    Ok(Vec::new())
 }
 
 // ---------------------------------------------------------------------------
@@ -259,16 +250,11 @@ fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
 
 /// ターミナルが truecolor (24bit) をサポートしているか簡易判定
 fn supports_truecolor() -> bool {
-    if let Ok(colorterm) = env::var("COLORTERM") {
-        let lower = colorterm.to_lowercase();
-        if lower.contains("truecolor") || lower.contains("24bit") {
-            return true;
-        }
+    if env::var("COLORTERM").map(|c| { let lower = c.to_lowercase(); lower.contains("truecolor") || lower.contains("24bit") }).unwrap_or(false) {
+        return true;
     }
-    if let Ok(term) = env::var("TERM") {
-        if term.to_lowercase().contains("truecolor") {
-            return true;
-        }
+    if env::var("TERM").map(|t| t.to_lowercase().contains("truecolor")).unwrap_or(false) {
+        return true;
     }
     false
 }
@@ -279,13 +265,25 @@ fn color_spec_to_escape(spec: &str) -> String {
     if spec.starts_with("\x1b[") {
         return spec.to_string();
     }
+    if spec.starts_with('#') && spec.len() == 7
+        && let Ok(r) = u8::from_str_radix(&spec[1..3], 16)
+        && let Ok(g) = u8::from_str_radix(&spec[3..5], 16)
+        && let Ok(b) = u8::from_str_radix(&spec[5..7], 16) {
+        if supports_truecolor() {
+            return format!("\x1b[38;2;{};{};{}m", r, g, b);
+        } else {
+            let idx = rgb_to_ansi256(r, g, b);
+            return format!("\x1b[38;5;{}m", idx);
+        }
+    }
 
-    if spec.starts_with('#') && spec.len() == 7 {
-        if let (Ok(r), Ok(g), Ok(b)) = (
-            u8::from_str_radix(&spec[1..3], 16),
-            u8::from_str_radix(&spec[3..5], 16),
-            u8::from_str_radix(&spec[5..7], 16),
-        ) {
+    if spec.to_lowercase().starts_with("rgb:") {
+        let rest = &spec[4..];
+        let parts: Vec<&str> = rest.split(',').collect();
+        if parts.len() == 3
+            && let Ok(r) = parts[0].trim().parse::<u8>()
+            && let Ok(g) = parts[1].trim().parse::<u8>()
+            && let Ok(b) = parts[2].trim().parse::<u8>() {
             if supports_truecolor() {
                 return format!("\x1b[38;2;{};{};{}m", r, g, b);
             } else {
@@ -295,25 +293,8 @@ fn color_spec_to_escape(spec: &str) -> String {
         }
     }
 
-    if spec.to_lowercase().starts_with("rgb:") {
-        let rest = &spec[4..];
-        let parts: Vec<&str> = rest.split(',').collect();
-        if parts.len() == 3 {
-            if let (Ok(r), Ok(g), Ok(b)) = (parts[0].trim().parse::<u8>(), parts[1].trim().parse::<u8>(), parts[2].trim().parse::<u8>()) {
-                if supports_truecolor() {
-                    return format!("\x1b[38;2;{};{};{}m", r, g, b);
-                } else {
-                    let idx = rgb_to_ansi256(r, g, b);
-                    return format!("\x1b[38;5;{}m", idx);
-                }
-            }
-        }
-    }
-
-    if spec.to_lowercase().starts_with("ansi:") {
-        if let Ok(idx) = spec[5..].trim().parse::<u8>() {
-            return format!("\x1b[38;5;{}m", idx);
-        }
+    if spec.to_lowercase().starts_with("ansi:") && let Ok(idx) = spec[5..].trim().parse::<u8>() {
+        return format!("\x1b[38;5;{}m", idx);
     }
 
     if let Some(code) = color_name_to_code(spec) {
@@ -335,10 +316,8 @@ fn color_for_entry(path: &PathBuf, rules: &Vec<Rule>) -> String {
                 TargetKind::Dir => metadata.is_dir(),
                 TargetKind::File => metadata.is_file(),
             };
-            if target_ok {
-                if rule.re.is_match(name) {
-                    return color_spec_to_escape(&rule.color);
-                }
+            if target_ok && rule.re.is_match(name) {
+                return color_spec_to_escape(&rule.color);
             }
         }
     } else {
@@ -433,7 +412,7 @@ fn format_long_entry_with_widths(path: &PathBuf, metadata: &fs::Metadata, color:
             format!("{}{}{}", color, name, RESET)
         };
 
-        return format!("{}{} {:>3} {:<user_w$} {:<group_w$} {:>size_w$} {} {}", file_type, perms, nlink, user, group, size, mtime, display_name, user_w=user_w, group_w=group_w, size_w=size_w);
+        format!("{}{} {:>3} {:<user_w$} {:<group_w$} {:>size_w$} {} {}", file_type, perms, nlink, user, group, size, mtime, display_name, user_w=user_w, group_w=group_w, size_w=size_w)
     }
 
     #[cfg(not(unix))]
